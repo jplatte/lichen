@@ -39,7 +39,11 @@ impl<'a> Context<'a> for CliContext {
     /// Run a step command
     /// Right now all output is dumped to stdout/stderr
     async fn run_command(&self, cmd: &mut Command) -> Result<(), installer::steps::Error> {
-        let _ = cmd.spawn()?.wait().await;
+        let status = cmd.spawn()?.wait().await?;
+        if !status.success() {
+            let program = cmd.as_std().get_program().to_string_lossy().into();
+            return Err(installer::steps::Error::CommandFailed { program, status });
+        }
         Ok(())
     }
 
