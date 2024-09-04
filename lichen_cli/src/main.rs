@@ -18,7 +18,7 @@ use dialoguer::theme::ColorfulTheme;
 use indicatif::ProgressStyle;
 use installer::{
     selections::{self, Group},
-    steps::Context,
+    steps::{Context, Error},
     systemd, Account, BootPartition, Installer, Locale, SystemPartition,
 };
 use nix::libc::geteuid;
@@ -38,21 +38,30 @@ impl<'a> Context<'a> for CliContext {
 
     /// Run a step command
     /// Right now all output is dumped to stdout/stderr
-    async fn run_command(&self, cmd: &mut Command) -> Result<(), installer::steps::Error> {
-        let status = cmd.spawn()?.wait().await?;
+    async fn run_command(&self, cmd: &mut Command) -> Result<(), Error> {
+        let spawn_res = cmd.spawn();
+        let program = cmd.as_std().get_program();
+
+        let status = spawn_res
+            .map_err(|error| {
+                let program = program.to_string_lossy().into();
+                Error::CommandSpawn { program, error }
+            })?
+            .wait()
+            .await
+            .map_err(|error| {
+                let program = program.to_string_lossy().into();
+                Error::CommandRun { program, error }
+            })?;
         if !status.success() {
-            let program = cmd.as_std().get_program().to_string_lossy().into();
-            return Err(installer::steps::Error::CommandFailed { program, status });
+            let program = program.to_string_lossy().into();
+            return Err(Error::CommandStatus { program, status });
         }
         Ok(())
     }
 
     /// Run a astep command, capture stdout
-    async fn run_command_captured(
-        &self,
-        cmd: &mut Command,
-        input: Option<&str>,
-    ) -> Result<Output, installer::steps::Error> {
+    async fn run_command_captured(&self, cmd: &mut Command, input: Option<&str>) -> Result<Output, Error> {
         cmd.stdin(Stdio::piped());
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());

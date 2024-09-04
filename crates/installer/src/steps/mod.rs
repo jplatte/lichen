@@ -4,7 +4,7 @@
 
 //! Lichen installation steps
 
-use std::{fmt::Debug, process::ExitStatus};
+use std::{fmt::Debug, io, process::ExitStatus};
 use thiserror::Error;
 
 mod context;
@@ -12,6 +12,7 @@ pub use context::Context;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    // FIXME: Rename to Fs and remove #[from] to get better error granularity
     #[error("io: {0}")]
     IO(#[from] std::io::Error),
 
@@ -21,8 +22,14 @@ pub enum Error {
     #[error("no mountpoint given")]
     NoMountpoint,
 
+    #[error("failed to spawn `{program}`: {error}")]
+    CommandSpawn { program: String, error: io::Error },
+
+    #[error("failed to run `{program}`: {error}")]
+    CommandRun { program: String, error: io::Error },
+
     #[error("command `{program}` exited with {status}")]
-    CommandFailed { program: String, status: ExitStatus },
+    CommandStatus { program: String, status: ExitStatus },
 }
 
 #[derive(Debug)]
